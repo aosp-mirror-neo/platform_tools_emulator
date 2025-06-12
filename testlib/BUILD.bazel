@@ -1,0 +1,21 @@
+load("//tools/base/bazel:bazel.bzl", "iml_module")
+load("//tools/base/bazel:kotlin.bzl", "kotlin_library")
+
+kotlin_library(
+    name = "testlib",
+    srcs = glob([
+        "testSrc/**/*.java",
+        "testSrc/**/*.kt",
+    ]),
+    visibility = ["//visibility:public"],
+)
+
+# managed by go/iml_to_build
+iml_module(
+    name = "android.sdktools.testlib",
+    enable_tests = False,
+    iml_files = ["android.sdktools.testlib.iml"],
+    test_srcs = ["testSrc"],
+    visibility = ["//visibility:public"],
+    deps = ["@intellij//:intellij-sdk"],
+)
