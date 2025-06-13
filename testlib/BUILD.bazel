@@ -1,5 +1,5 @@
-load("//tools/base/bazel:bazel.bzl", "iml_module")
-load("//tools/base/bazel:kotlin.bzl", "kotlin_library")
+load("//build/bazel/rules:iml.bzl", "iml_module")
+load("//build/bazel/rules:kotlin.bzl", "kotlin_library")
 
 kotlin_library(
     name = "testlib",
