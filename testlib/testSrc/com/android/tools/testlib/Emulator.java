@@ -27,6 +27,11 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class Emulator implements AutoCloseable {
+    /**
+     * By default, we set the emulator to a system image that most integration tests should be
+     * using. This version corresponds to {@code INTEGRATION_TEST_SYSTEM_IMAGE} in Bazel.
+     */
+    public static final SystemImage DEFAULT_EMULATOR_SYSTEM_IMAGE = SystemImage.API_31;
     private final TestFileSystem fileSystem;
     private final AndroidSdk sdk;
     private final LogFile logFile;
