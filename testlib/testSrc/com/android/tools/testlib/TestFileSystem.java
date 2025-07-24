@@ -50,4 +50,8 @@ public class TestFileSystem {
     public Path getAndroidHome() {
         return androidHome;
     }
+
+    public Path getTmp() {
+        return tmp;
+    }
 }

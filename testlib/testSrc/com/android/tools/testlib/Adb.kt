@@ -19,6 +19,7 @@ import java.io.FileWriter
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.Paths
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -136,16 +137,31 @@ private constructor(
         /** Default start for most use cases. */
         @JvmStatic
         @Throws(IOException::class)
-        fun start(sdk: AndroidSdk, env: Map<String, String>): Adb = start(sdk, env, true, "nodaemon")
+        fun start(sdk: AndroidSdk, fileSystem: TestFileSystem): Adb = start(sdk, fileSystem, true, "nodaemon")
+
+        @Throws(IOException::class)
+        private fun getAdbEnv(fileSystem: TestFileSystem): MutableMap<String, String> {
+            var testOutputDir = System.getenv("TEST_UNDECLARED_OUTPUTS_DIR")
+            if (testOutputDir == null) {
+                testOutputDir = fileSystem.tmp.toString()
+            }
+
+            val env: MutableMap<String, String> = HashMap()
+            env.put("HOME", fileSystem.home.toString())
+            env.put("TMPDIR", Files.createTempDirectory(Paths.get(testOutputDir), "adb_server_session_output").toString())
+            env.put("ADB_TRACE", "1")
+            return env
+        }
 
         @JvmStatic
         @Throws(IOException::class)
         fun start(
             sdk: AndroidSdk,
-            env: Map<String, String>,
+            fileSystem: TestFileSystem,
             startServer: Boolean,
             vararg params: String,
         ): Adb {
+            val env = getAdbEnv(fileSystem)
             if (!startServer) return Adb(sdk, env)
             val command = arrayOf("server") + params.filter(String::isNotBlank).toTypedArray()
             return exec(sdk, env, *command)
