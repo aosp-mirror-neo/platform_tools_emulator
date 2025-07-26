@@ -19,12 +19,14 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 public class Emulator implements AutoCloseable {
     /**
@@ -33,7 +35,6 @@ public class Emulator implements AutoCloseable {
      */
     public static final SystemImage DEFAULT_EMULATOR_SYSTEM_IMAGE = SystemImage.API_31;
     private final TestFileSystem fileSystem;
-    private final AndroidSdk sdk;
     private final LogFile logFile;
     private final LogFile logCat;
     private final String portString;
@@ -93,6 +94,25 @@ public class Emulator implements AutoCloseable {
             int grpcPort,
             List<String> extraEmulatorFlags)
             throws IOException, InterruptedException {
+        return Emulator.start(
+            fileSystem,
+            sdk.getSourceDir().resolve("emulator").resolve("emulator"),
+            sdk.getSourceDir(),
+            display,
+            name,
+            grpcPort,
+            extraEmulatorFlags);
+    }
+
+    public static Emulator start(
+            TestFileSystem fileSystem,
+            Path emulatorBinary,
+            Path sdkDir,
+            Display display,
+            String name,
+            int grpcPort,
+            List<String> extraEmulatorFlags)
+            throws IOException, InterruptedException {
         Path logsDir = Files.createTempDirectory(Environment.getTestOutputDir(), "emulator_logs");
 
         LogFile logCat = new LogFile(logsDir.resolve(name + "_logcat.txt"));
@@ -100,10 +120,7 @@ public class Emulator implements AutoCloseable {
         List<String> procArgs =
                 new ArrayList<>(
                         Arrays.asList(
-                                sdk.getSourceDir()
-                                        .resolve("emulator")
-                                        .resolve("emulator")
-                                        .toString(),
+                                emulatorBinary.toString(),
                                 "@" + name,
                                 // This port value needs to be unique for each emulator
                                 "-grpc",
@@ -129,7 +146,9 @@ public class Emulator implements AutoCloseable {
         pb.environment().put("HOME", fileSystem.getHome().toString());
         pb.environment().put("ANDROID_EMULATOR_HOME", fileSystem.getAndroidHome().toString());
         pb.environment().put("ANDROID_AVD_HOME", getAvdHome(fileSystem).toString());
-        pb.environment().put("ANDROID_SDK_ROOT", sdk.getSourceDir().toString());
+        pb.environment().put("ANDROID_SDK_ROOT", sdkDir.toAbsolutePath().toString());
+        // Older emulators (go/aog/3448633) check if this directory exists:
+        Files.createDirectories(sdkDir.toAbsolutePath().resolve("platforms"));
         pb.environment().put("ANDROID_PREFS_ROOT", fileSystem.getHome().toString());
         if (display.getDisplay() != null) {
             pb.environment().put("DISPLAY", display.getDisplay());
@@ -169,7 +188,6 @@ public class Emulator implements AutoCloseable {
                             }
                         })
                 .start();
-
         String portString =
                 logFile.waitForMatchingLine(
                                 ".*control console listening on port (\\d+), ADB on port \\d+",
@@ -177,19 +195,17 @@ public class Emulator implements AutoCloseable {
                                 TimeUnit.MINUTES)
                         .group(1);
 
-        return new Emulator(fileSystem, sdk, logFile, logCat, portString, process, name);
+        return new Emulator(fileSystem, logFile, logCat, portString, process, name);
     }
 
     private Emulator(
             TestFileSystem fileSystem,
-            AndroidSdk sdk,
             LogFile logFile,
             LogFile logCat,
             String portString,
             Process process,
             String name) {
         this.fileSystem = fileSystem;
-        this.sdk = sdk;
         this.logFile = logFile;
         this.logCat = logCat;
         this.portString = portString;
@@ -207,10 +223,6 @@ public class Emulator implements AutoCloseable {
 
     public Path getHome() {
         return fileSystem.getHome();
-    }
-
-    public AndroidSdk getSdk() {
-        return sdk;
     }
 
     public LogFile getLogCat() {

@@ -8,7 +8,6 @@
     <orderEntry type="inheritedJdk" />
     <orderEntry type="library" name="studio-sdk" level="project" />
     <orderEntry type="sourceFolder" forTests="false" />
-    <orderEntry type="module" module-name="android.sdktools.testutils" scope="TEST" />
     <orderEntry type="module-library" scope="TEST">
       <library>
         <CLASSES>
@@ -21,6 +20,5 @@
       </library>
     </orderEntry>
     <orderEntry type="module" module-name="android.sdktools.testlib" scope="TEST" />
-    <orderEntry type="module" module-name="as-driver.utils" scope="TEST" />
   </component>
 </module>
