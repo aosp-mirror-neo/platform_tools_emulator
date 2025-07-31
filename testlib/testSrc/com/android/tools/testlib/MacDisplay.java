@@ -24,7 +24,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class MacDisplay implements Display {
-    private static final String FFMPEG = "tools/vendor/google/testing/display/ffmpeg_mac64";
+    private static final String FFMPEG = "tools/emulator/testlib/display/ffmpeg_mac64";
 
     private Process recorder;
 

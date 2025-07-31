@@ -15,14 +15,13 @@
  */
 package com.android.tools.idea;
 
-import com.android.testutils.TestUtils;
-import com.android.tools.asdriver.tests.Workspace;
 import com.android.tools.testlib.Adb;
 import com.android.tools.testlib.AndroidSdk;
 import com.android.tools.testlib.Display;
 import com.android.tools.testlib.Emulator;
 import com.android.tools.testlib.TestFileSystem;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import org.junit.Rule;
 import org.junit.Test;
@@ -35,16 +34,44 @@ public class EmulatorTest {
   @Test
   public void runEmulatorTest() throws Exception {
     TestFileSystem fileSystem = new TestFileSystem(tempFolder.getRoot().toPath());
-    AndroidSdk sdk = new AndroidSdk(TestUtils.resolveWorkspacePath(TestUtils.getRelativeSdk()));
 
-    Path systemImageDir = Workspace.getRoot(Emulator.DEFAULT_EMULATOR_SYSTEM_IMAGE.path);
+    String sdkPath = getProperty("emulator.test.sdk.path");
+    AndroidSdk sdk = new AndroidSdk(Paths.get(sdkPath));
+
+    String allFiles = getProperty("emulator.test.system.image.files");
+    Path systemImageDir = getPackageDirectory(allFiles.split(" "));
+
     Emulator.createEmulator(fileSystem, "emu", systemImageDir);
+
+    String emuBin = getProperty("emulator.test.emulator.path");
 
     try (Display display = Display.createDefault();
          Adb adb = Adb.start(sdk, fileSystem);
-         Emulator emulator = Emulator.start(fileSystem, sdk, display, "emu", 8554, new ArrayList<>())) {
+         Emulator emulator = Emulator.start(fileSystem,
+                                            Paths.get(emuBin),
+                                            sdk.getSourceDir(),
+                                            display, "emu", 8554, new ArrayList<>())) {
       emulator.waitForBoot();
       adb.waitForDevice(emulator);
     }
+  }
+
+  Path getPackageDirectory(String[] files) {
+    for (String file : files) {
+      Path path = Paths.get(file);
+      Path name = path.getFileName();
+      if (name.toString().equals("source.properties")) {
+        return path.getParent().toAbsolutePath().normalize();
+      }
+    }
+    throw new IllegalStateException("source.properties not found");
+  }
+
+  String getProperty(String property) {
+    String value = System.getProperty(property);
+    if (value == null) {
+      throw new IllegalStateException("Property " + property + " must be set.");
+    }
+    return value;
   }
 }

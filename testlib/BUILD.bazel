@@ -7,12 +7,20 @@ kotlin_library(
         "testSrc/**/*.java",
         "testSrc/**/*.kt",
     ]),
+    data = [
+        "//tools/emulator/testlib/display:ffmpeg_files",
+        "//tools/emulator/testlib/display:xvfb",
+    ],
     visibility = ["//visibility:public"],
 )
 
 # managed by go/iml_to_build
 iml_module(
     name = "android.sdktools.testlib",
+    data = [
+        "//tools/emulator/testlib/display:ffmpeg_files",
+        "//tools/emulator/testlib/display:xvfb",
+    ],
     enable_tests = False,
     iml_files = ["android.sdktools.testlib.iml"],
     test_srcs = ["testSrc"],
