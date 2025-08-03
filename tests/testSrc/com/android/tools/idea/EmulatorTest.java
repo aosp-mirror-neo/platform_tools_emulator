@@ -23,6 +23,7 @@ import com.android.tools.testlib.TestFileSystem;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Optional;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -41,7 +42,9 @@ public class EmulatorTest {
     String allFiles = getProperty("emulator.test.system.image.files");
     Path systemImageDir = getPackageDirectory(allFiles.split(" "));
 
-    Emulator.createEmulator(fileSystem, "emu", systemImageDir);
+    boolean isEmuNext = Optional.ofNullable(System.getProperty("emulator.test.emulator.is-emu-next")).map(s -> s.equals("1")).orElse(false);
+
+    Emulator.createEmulator(fileSystem, "emu", systemImageDir, isEmuNext);
 
     String emuBin = getProperty("emulator.test.emulator.path");
 
@@ -49,6 +52,7 @@ public class EmulatorTest {
          Adb adb = Adb.start(sdk, fileSystem);
          Emulator emulator = Emulator.start(fileSystem,
                                             Paths.get(emuBin),
+                                            isEmuNext,
                                             sdk.getSourceDir(),
                                             display, "emu", 8554, new ArrayList<>())) {
       emulator.waitForBoot();
