@@ -37,11 +37,89 @@ public class Emulator implements AutoCloseable {
     private final TestFileSystem fileSystem;
     private final LogFile logFile;
     private final LogFile logCat;
-    private final String portString;
+    private final String serialNumber;
     private final Process process;
     private final String name;
 
+    private static void writeMinimalAvdConfig(FileWriter writer, String abi, Path systemImage) throws IOException {
+        writer.write(String.format("PlayStore.enabled=false%n"));
+        writer.write(String.format("abi.type=%s%n", abi));
+        writer.write(String.format("avd.ini.encoding=UTF-8%n"));
+        writer.write(String.format("hw.accelerometer=yes%n"));
+        writer.write(String.format("hw.audioInput=yes%n"));
+        writer.write(String.format("hw.battery=yes%n"));
+        writer.write(String.format("hw.cpu.arch=%s%n", abi));
+        writer.write(String.format("hw.dPad=no%n"));
+        writer.write(String.format("hw.device.hash2=MD5:524882cfa9f421413193056700a29392%n"));
+        writer.write(String.format("hw.device.manufacturer=Google%n"));
+        writer.write(String.format("hw.device.name=pixel%n"));
+        writer.write(String.format("hw.gps=yes%n"));
+        writer.write(String.format("hw.lcd.density=480%n"));
+        writer.write(String.format("hw.lcd.height=1920%n"));
+        writer.write(String.format("hw.lcd.width=1080%n"));
+        writer.write(String.format("hw.mainKeys=no%n"));
+        writer.write(String.format("hw.sdCard=yes%n"));
+        writer.write(String.format("hw.sensors.orientation=yes%n"));
+        writer.write(String.format("hw.sensors.proximity=yes%n"));
+        writer.write(String.format("hw.trackBall=no%n"));
+        writer.write(String.format("image.sysdir.1=%s%n", systemImage));
+    }
+
+    private static void writeFullAvdConfig(FileWriter writer, String abi, Path systemImage) throws IOException {
+        writer.write(String.format("PlayStore.enabled=true%n"));
+        writer.write(String.format("abi.type=%s%n", abi));
+        writer.write(String.format("avd.ini.displayname = V%n"));
+        writer.write(String.format("avd.ini.encoding=UTF-8%n"));
+        writer.write(String.format("disk.dataPartition.size = 6442450944%n"));
+        writer.write(String.format("fastboot.chosenSnapshotFile =%n"));
+        writer.write(String.format("fastboot.forceChosenSnapshotBoot = no%n"));
+        writer.write(String.format("fastboot.forceColdBoot = no%n"));
+        writer.write(String.format("fastboot.forceFastBoot = yes%n"));
+        writer.write(String.format("hw.accelerometer=yes%n"));
+        writer.write(String.format("hw.arc = false%n"));
+        writer.write(String.format("hw.audioInput=yes%n"));
+        writer.write(String.format("hw.battery=yes%n"));
+        writer.write(String.format("hw.camera.back = virtualscene%n"));
+        writer.write(String.format("hw.camera.front = emulated%n"));
+        writer.write(String.format("hw.cpu.arch=%s%n", abi));
+        writer.write(String.format("hw.cpu.ncore = 4%n"));
+        writer.write(String.format("hw.dPad=no%n"));
+        writer.write(String.format("hw.device.hash2=MD5:524882cfa9f421413193056700a29392%n"));
+        writer.write(String.format("hw.device.manufacturer=Google%n"));
+        writer.write(String.format("hw.device.name=pixel%n"));
+        writer.write(String.format("hw.gps=yes%n"));
+        writer.write(String.format("hw.gpu.enabled = yes%n"));
+        writer.write(String.format("hw.gpu.mode = auto%n"));
+        writer.write(String.format("hw.initialOrientation = portrait%n"));
+        writer.write(String.format("hw.keyboard = yes%n"));
+        writer.write(String.format("hw.lcd.density=480%n"));
+        writer.write(String.format("hw.lcd.height=1920%n"));
+        writer.write(String.format("hw.lcd.width=1080%n"));
+        writer.write(String.format("hw.mainKeys=no%n"));
+        writer.write(String.format("hw.ramSize = 2048%n"));
+        writer.write(String.format("hw.sdCard=yes%n"));
+        writer.write(String.format("hw.sensors.orientation=yes%n"));
+        writer.write(String.format("hw.sensors.proximity=yes%n"));
+        writer.write(String.format("hw.trackBall=no%n"));
+        writer.write(String.format("image.sysdir.1=%s%n", systemImage));
+        writer.write(String.format("runtime.network.latency = none%n"));
+        writer.write(String.format("runtime.network.speed = full%n"));
+        writer.write(String.format("sdcard.size = 512M%n"));
+        writer.write(String.format("showDeviceFrame = yes%n"));
+        writer.write(String.format("skin.dynamic = yes%n"));
+        writer.write(String.format("tag.display = Google Play%n"));
+        writer.write(String.format("tag.displaynames = Google Play%n"));
+        writer.write(String.format("tag.id = google_apis_playstore%n"));
+        writer.write(String.format("tag.ids = google_apis_playstore%n"));
+        writer.write(String.format("vm.heapSize = 256%n"));
+    }
+
     public static void createEmulator(TestFileSystem fileSystem, String name, Path systemImage)
+            throws IOException {
+        createEmulator(fileSystem, name, systemImage, false);
+    }
+
+    public static void createEmulator(TestFileSystem fileSystem, String name, Path systemImage, boolean isEmuNext)
             throws IOException {
         Path avdHome = getAvdHome(fileSystem);
         Files.createDirectories(avdHome);
@@ -62,27 +140,12 @@ public class Emulator implements AutoCloseable {
         Path configIni = avdHome.resolve(name + ".avd").resolve("config.ini");
         Files.createDirectories(configIni.getParent());
         try (FileWriter writer = new FileWriter(configIni.toFile())) {
-            writer.write(String.format("PlayStore.enabled=false%n"));
-            writer.write(String.format("abi.type=%s%n", abi.group(1)));
-            writer.write(String.format("avd.ini.encoding=UTF-8%n"));
-            writer.write(String.format("hw.accelerometer=yes%n"));
-            writer.write(String.format("hw.audioInput=yes%n"));
-            writer.write(String.format("hw.battery=yes%n"));
-            writer.write(String.format("hw.cpu.arch=%s%n", abi.group(1)));
-            writer.write(String.format("hw.dPad=no%n"));
-            writer.write(String.format("hw.device.hash2=MD5:524882cfa9f421413193056700a29392%n"));
-            writer.write(String.format("hw.device.manufacturer=Google%n"));
-            writer.write(String.format("hw.device.name=pixel%n"));
-            writer.write(String.format("hw.gps=yes%n"));
-            writer.write(String.format("hw.lcd.density=480%n"));
-            writer.write(String.format("hw.lcd.height=1920%n"));
-            writer.write(String.format("hw.lcd.width=1080%n"));
-            writer.write(String.format("hw.mainKeys=no%n"));
-            writer.write(String.format("hw.sdCard=yes%n"));
-            writer.write(String.format("hw.sensors.orientation=yes%n"));
-            writer.write(String.format("hw.sensors.proximity=yes%n"));
-            writer.write(String.format("hw.trackBall=no%n"));
-            writer.write(String.format("image.sysdir.1=%s%n", systemImage));
+            if (isEmuNext) {
+                // TODO(b/436262536): Make minimal work with emu-next.
+                writeFullAvdConfig(writer, abi.group(1), systemImage);
+            } else {
+                writeMinimalAvdConfig(writer, abi.group(1), systemImage);
+            }
         }
     }
 
@@ -97,6 +160,7 @@ public class Emulator implements AutoCloseable {
         return Emulator.start(
             fileSystem,
             sdk.getSourceDir().resolve("emulator").resolve("emulator"),
+            false,
             sdk.getSourceDir(),
             display,
             name,
@@ -107,6 +171,7 @@ public class Emulator implements AutoCloseable {
     public static Emulator start(
             TestFileSystem fileSystem,
             Path emulatorBinary,
+            boolean isEmuNext,
             Path sdkDir,
             Display display,
             String name,
@@ -139,6 +204,11 @@ public class Emulator implements AutoCloseable {
                                 "*:V",
                                 "-logcat-output",
                                 logCat.getPath().toFile().getAbsolutePath()));
+        if (isEmuNext) {
+            procArgs.add("-no-vnc");
+            procArgs.add("-vmodule");
+            procArgs.add("*=1");
+        }
 
         procArgs.addAll(extraEmulatorFlags);
 
@@ -157,9 +227,10 @@ public class Emulator implements AutoCloseable {
         // properly without this env var.
         pb.environment().put("CHROME_REMOTE_DESKTOP_SESSION", "1");
 
-        LogFile logFile = new LogFile(logsDir.resolve(name + "_stdout.txt"));
-        pb.redirectOutput(logFile.getPath().toFile());
-        pb.redirectError(Files.createFile(logsDir.resolve(name + "_stderr.txt")).toFile());
+        LogFile logFileOut = new LogFile(logsDir.resolve(name + "_stdout.txt"));
+        LogFile logFileErr = new LogFile(logsDir.resolve(name + "_stderr.txt"));
+        pb.redirectOutput(logFileOut.getPath().toFile());
+        pb.redirectError(logFileErr.getPath().toFile());
         Process process = pb.start();
 
         // There's no easy/reliable way to determine whether an emulator even CAN start on this
@@ -188,27 +259,35 @@ public class Emulator implements AutoCloseable {
                             }
                         })
                 .start();
-        String portString =
-                logFile.waitForMatchingLine(
-                                ".*control console listening on port (\\d+), ADB on port \\d+",
-                                2,
-                                TimeUnit.MINUTES)
-                        .group(1);
 
-        return new Emulator(fileSystem, logFile, logCat, portString, process, name);
+        LogFile logFile;
+        String serialNumber;
+        if (isEmuNext) {
+            logFile = logFileErr;
+            serialNumber =
+                logFile.waitForMatchingLine(
+                    ".*Expected adb serial number: (emulator-\\d+)", 2, TimeUnit.MINUTES).group(1);
+        } else {
+            logFile = logFileOut;
+            serialNumber = "emulator-" +
+                logFile.waitForMatchingLine(
+                    ".*control console listening on port (\\d+), ADB on port \\d+", 2, TimeUnit.MINUTES).group(1);
+        }
+
+        return new Emulator(fileSystem, logFile, logCat, serialNumber, process, name);
     }
 
     private Emulator(
             TestFileSystem fileSystem,
             LogFile logFile,
             LogFile logCat,
-            String portString,
+            String serialNumber,
             Process process,
             String name) {
         this.fileSystem = fileSystem;
         this.logFile = logFile;
         this.logCat = logCat;
-        this.portString = portString;
+        this.serialNumber = serialNumber;
         this.process = process;
         this.name = name;
     }
@@ -218,7 +297,7 @@ public class Emulator implements AutoCloseable {
             throw new IllegalStateException("Emulator not running yet.");
         }
         TestLogger.log("Emulator#waitForBoot");
-        logFile.waitForMatchingLine(".*Boot completed.*", 12, TimeUnit.MINUTES);
+        logFile.waitForMatchingLine(".*Boot completed in \\d+ ms", 12, TimeUnit.MINUTES);
     }
 
     public Path getHome() {
@@ -229,10 +308,6 @@ public class Emulator implements AutoCloseable {
         return logCat;
     }
 
-    public String getPortString() {
-        return portString;
-    }
-
     public String getName() {
         return name;
     }
@@ -240,7 +315,7 @@ public class Emulator implements AutoCloseable {
     public String getSerialNumber() {
         // In accordance with
         // https://cs.android.com/android/platform/superproject/+/master:packages/modules/adb/SERVICES.TXT
-        return "emulator-" + portString;
+        return serialNumber;
     }
 
     @Override
@@ -275,8 +350,8 @@ public class Emulator implements AutoCloseable {
         // Android Automated Test Device system image
         API_33_ATD("system_image_android-33_aosp_atd_x86_64"),
         // Google Play builds
-        API_33_PlayStore("system_image_android-33PlayStore_default_x86_64");
-
+        API_33_PlayStore("system_image_android-33PlayStore_default_x86_64"),
+        API_35_PlayStore("system_image_android-35PlayStore_default_x86_64");
         /** Path to the image for this emulator {@link SystemImage}. */
         public final String path;
 
