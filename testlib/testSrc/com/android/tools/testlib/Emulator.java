@@ -65,61 +65,7 @@ public class Emulator implements AutoCloseable {
         writer.write(String.format("image.sysdir.1=%s%n", systemImage));
     }
 
-    private static void writeFullAvdConfig(FileWriter writer, String abi, Path systemImage) throws IOException {
-        writer.write(String.format("PlayStore.enabled=true%n"));
-        writer.write(String.format("abi.type=%s%n", abi));
-        writer.write(String.format("avd.ini.displayname = V%n"));
-        writer.write(String.format("avd.ini.encoding=UTF-8%n"));
-        writer.write(String.format("disk.dataPartition.size = 6442450944%n"));
-        writer.write(String.format("fastboot.chosenSnapshotFile =%n"));
-        writer.write(String.format("fastboot.forceChosenSnapshotBoot = no%n"));
-        writer.write(String.format("fastboot.forceColdBoot = no%n"));
-        writer.write(String.format("fastboot.forceFastBoot = yes%n"));
-        writer.write(String.format("hw.accelerometer=yes%n"));
-        writer.write(String.format("hw.arc = false%n"));
-        writer.write(String.format("hw.audioInput=yes%n"));
-        writer.write(String.format("hw.battery=yes%n"));
-        writer.write(String.format("hw.camera.back = virtualscene%n"));
-        writer.write(String.format("hw.camera.front = emulated%n"));
-        writer.write(String.format("hw.cpu.arch=%s%n", abi));
-        writer.write(String.format("hw.cpu.ncore = 4%n"));
-        writer.write(String.format("hw.dPad=no%n"));
-        writer.write(String.format("hw.device.hash2=MD5:524882cfa9f421413193056700a29392%n"));
-        writer.write(String.format("hw.device.manufacturer=Google%n"));
-        writer.write(String.format("hw.device.name=pixel%n"));
-        writer.write(String.format("hw.gps=yes%n"));
-        writer.write(String.format("hw.gpu.enabled = yes%n"));
-        writer.write(String.format("hw.gpu.mode = auto%n"));
-        writer.write(String.format("hw.initialOrientation = portrait%n"));
-        writer.write(String.format("hw.keyboard = yes%n"));
-        writer.write(String.format("hw.lcd.density=480%n"));
-        writer.write(String.format("hw.lcd.height=1920%n"));
-        writer.write(String.format("hw.lcd.width=1080%n"));
-        writer.write(String.format("hw.mainKeys=no%n"));
-        writer.write(String.format("hw.ramSize = 2048%n"));
-        writer.write(String.format("hw.sdCard=yes%n"));
-        writer.write(String.format("hw.sensors.orientation=yes%n"));
-        writer.write(String.format("hw.sensors.proximity=yes%n"));
-        writer.write(String.format("hw.trackBall=no%n"));
-        writer.write(String.format("image.sysdir.1=%s%n", systemImage));
-        writer.write(String.format("runtime.network.latency = none%n"));
-        writer.write(String.format("runtime.network.speed = full%n"));
-        writer.write(String.format("sdcard.size = 512M%n"));
-        writer.write(String.format("showDeviceFrame = yes%n"));
-        writer.write(String.format("skin.dynamic = yes%n"));
-        writer.write(String.format("tag.display = Google Play%n"));
-        writer.write(String.format("tag.displaynames = Google Play%n"));
-        writer.write(String.format("tag.id = google_apis_playstore%n"));
-        writer.write(String.format("tag.ids = google_apis_playstore%n"));
-        writer.write(String.format("vm.heapSize = 256%n"));
-    }
-
     public static void createEmulator(TestFileSystem fileSystem, String name, Path systemImage)
-            throws IOException {
-        createEmulator(fileSystem, name, systemImage, false);
-    }
-
-    public static void createEmulator(TestFileSystem fileSystem, String name, Path systemImage, boolean isEmuNext)
             throws IOException {
         Path avdHome = getAvdHome(fileSystem);
         Files.createDirectories(avdHome);
@@ -140,12 +86,7 @@ public class Emulator implements AutoCloseable {
         Path configIni = avdHome.resolve(name + ".avd").resolve("config.ini");
         Files.createDirectories(configIni.getParent());
         try (FileWriter writer = new FileWriter(configIni.toFile())) {
-            if (isEmuNext) {
-                // TODO(b/436262536): Make minimal work with emu-next.
-                writeFullAvdConfig(writer, abi.group(1), systemImage);
-            } else {
-                writeMinimalAvdConfig(writer, abi.group(1), systemImage);
-            }
+            writeMinimalAvdConfig(writer, abi.group(1), systemImage);
         }
     }
 
@@ -204,11 +145,6 @@ public class Emulator implements AutoCloseable {
                                 "*:V",
                                 "-logcat-output",
                                 logCat.getPath().toFile().getAbsolutePath()));
-        if (isEmuNext) {
-            procArgs.add("-no-vnc");
-            procArgs.add("-vmodule");
-            procArgs.add("*=1");
-        }
 
         procArgs.addAll(extraEmulatorFlags);
 

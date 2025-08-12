@@ -44,7 +44,7 @@ public class EmulatorTest {
 
     boolean isEmuNext = Optional.ofNullable(System.getProperty("emulator.test.emulator.is-emu-next")).map(s -> s.equals("1")).orElse(false);
 
-    Emulator.createEmulator(fileSystem, "emu", systemImageDir, isEmuNext);
+    Emulator.createEmulator(fileSystem, "emu", systemImageDir);
 
     String emuBin = getProperty("emulator.test.emulator.path");
 
