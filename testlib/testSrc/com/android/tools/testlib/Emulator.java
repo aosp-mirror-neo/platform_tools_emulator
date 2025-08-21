@@ -19,14 +19,12 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Stream;
 
 public class Emulator implements AutoCloseable {
     /**
@@ -41,14 +39,14 @@ public class Emulator implements AutoCloseable {
     private final Process process;
     private final String name;
 
-    private static void writeMinimalAvdConfig(FileWriter writer, String abi, Path systemImage) throws IOException {
+    private static void writeMinimalAvdConfig(FileWriter writer, String abi, String arch, Path systemImage) throws IOException {
         writer.write(String.format("PlayStore.enabled=false%n"));
         writer.write(String.format("abi.type=%s%n", abi));
         writer.write(String.format("avd.ini.encoding=UTF-8%n"));
         writer.write(String.format("hw.accelerometer=yes%n"));
         writer.write(String.format("hw.audioInput=yes%n"));
         writer.write(String.format("hw.battery=yes%n"));
-        writer.write(String.format("hw.cpu.arch=%s%n", abi));
+        writer.write(String.format("hw.cpu.arch=%s%n", arch));
         writer.write(String.format("hw.dPad=no%n"));
         writer.write(String.format("hw.device.hash2=MD5:524882cfa9f421413193056700a29392%n"));
         writer.write(String.format("hw.device.manufacturer=Google%n"));
@@ -72,7 +70,8 @@ public class Emulator implements AutoCloseable {
 
         Path sourceProperties = systemImage.resolve("source.properties");
         Matcher api = getString(sourceProperties, "AndroidVersion.ApiLevel=(.*)");
-        Matcher abi = getString(sourceProperties, "SystemImage.Abi=(.*)");
+        String abi = getString(sourceProperties, "SystemImage.Abi=(.*)").group(1);
+        String arch = emulatorArchitectureFrom(abi);
 
         Path emuIni = avdHome.resolve(name + ".ini");
         Files.createFile(emuIni);
@@ -86,7 +85,7 @@ public class Emulator implements AutoCloseable {
         Path configIni = avdHome.resolve(name + ".avd").resolve("config.ini");
         Files.createDirectories(configIni.getParent());
         try (FileWriter writer = new FileWriter(configIni.toFile())) {
-            writeMinimalAvdConfig(writer, abi.group(1), systemImage);
+            writeMinimalAvdConfig(writer, abi, arch, systemImage);
         }
     }
 
@@ -98,9 +97,10 @@ public class Emulator implements AutoCloseable {
             int grpcPort,
             List<String> extraEmulatorFlags)
             throws IOException, InterruptedException {
+        String emulatorDir = Environment.isArm64() ? "emulator-arm64" : "emulator";
         return Emulator.start(
             fileSystem,
-            sdk.getSourceDir().resolve("emulator").resolve("emulator"),
+            sdk.getSourceDir().resolve(emulatorDir).resolve("emulator"),
             false,
             sdk.getSourceDir(),
             display,
@@ -262,6 +262,12 @@ public class Emulator implements AutoCloseable {
         }
     }
 
+    private static String emulatorArchitectureFrom(String abi) {
+        if ("arm64-v8a".equals(abi)) return "arm64";
+        if ("x86_64".equals(abi)) return "x86_64";
+        throw new IllegalArgumentException("Unknown emulator architecture for the abi " + abi);
+    }
+
     private static Path getAvdHome(TestFileSystem fileSystem) {
         return fileSystem.getAndroidHome().resolve("avd");
     }
@@ -292,6 +298,8 @@ public class Emulator implements AutoCloseable {
         public final String path;
 
         private SystemImage(String path) {
+            // When running on M1 Mac, we need to use arm64 images
+            path = Environment.isArm64() ? path.replace("x86_64", "arm64") : path;
             // When running from IDE, we need to adjust the path of the artifact.
             // Run "bazel cquery --output=files @system_image_android-31_default_x86_64//:*"
             // to see the actual path.
