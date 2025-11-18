@@ -25,6 +25,6 @@ filegroup(
     }),
     # Only to be used in tests
     visibility = [
-        "//tools/emulator/testlib:__pkg__",
+        "//tools/emulator:__subpackages__",
     ],
 )
