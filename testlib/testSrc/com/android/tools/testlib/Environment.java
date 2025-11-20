@@ -94,6 +94,11 @@ public class Environment {
             String workspace = System.getenv("TEST_WORKSPACE");
             String workspaceParent = System.getenv("TEST_SRCDIR");
             if (workspace != null && workspaceParent != null) {
+                String moduleWorkspace = System.getenv("MODULE_WORKSPACE");
+                if (moduleWorkspace != null) {
+                  // Allow overriding for when bazel modules are used.
+                  workspace = moduleWorkspace;
+                }
                 workspaceRoot = Paths.get(workspaceParent, workspace);
 
                 try {
