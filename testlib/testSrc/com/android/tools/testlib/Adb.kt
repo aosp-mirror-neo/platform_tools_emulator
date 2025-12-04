@@ -21,8 +21,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import java.util.*
 import java.util.concurrent.TimeUnit
 import java.util.regex.Matcher
 import kotlin.time.Duration
@@ -114,9 +113,16 @@ private constructor(
 
     @JvmSynthetic
     fun waitForDevice(emulator: Emulator, duration: Duration) {
-        runCommand("track-devices") {
-            // https://cs.android.com/android/platform/superproject/+/fbe41e9a47a57f0d20887ace0fc4d0022afd2f5f:packages/modules/adb/SERVICES.TXT;l=23
-            waitForLog("([0-9a-f]{4})?${emulator.serialNumber}\tdevice", duration)
+        runCommand("devices")
+        if (!Environment.isWindows()) {
+            runCommand("track-devices") {
+                // https://cs.android.com/android/platform/superproject/+/fbe41e9a47a57f0d20887ace0fc4d0022afd2f5f:packages/modules/adb/SERVICES.TXT;l=23
+                waitForLog("([0-9a-f]{4})?${emulator.serialNumber}\tdevice", duration)
+            }
+        } else {
+            runCommand("track-devices") {
+                waitForLog("([0-9a-f]{4})?localhost:[0-9]+\tdevice", duration)
+            }
         }
         runCommand("shell", "svc", "wifi", "disable")
     }
@@ -131,6 +137,29 @@ private constructor(
     @Throws(IOException::class)
     fun runCommand(vararg command: String, emulator: Emulator? = null, block: (Adb.() -> Unit)) {
         exec(sdk, env, *command, emulator = emulator).use { with(it, block) }
+    }
+
+    @Throws(IOException::class)
+    fun logcat(vararg params: String): LogFile {
+        val logsDir = Files.createTempDirectory(Environment.getTestOutputDir(), "adb_logcat")
+        val stdout = logsDir.resolve("stdout.txt").also { Files.createFile(it) }
+        val stderr = logsDir.resolve("stderr.txt").also { Files.createFile(it) }
+        val command =
+            listOf(
+                sdk.sourceDir
+                    .resolve("platform-tools")
+                    .resolve("adb" + ext(".exe"))
+                    .toString(), "logcat") + params
+        System.out.printf(
+            "Logcat Adb invocation '${command.joinToString(" ")}' has stdout log at: $stdout%n"
+        )
+        val pb =
+          ProcessBuilder(command).apply {
+            redirectOutput(ProcessBuilder.Redirect.appendTo(stdout.toFile()))
+            redirectError(ProcessBuilder.Redirect.appendTo(stderr.toFile()))
+          }
+        pb.start()
+        return LogFile(stdout)
     }
 
     companion object {

@@ -121,96 +121,96 @@ public class Emulator implements AutoCloseable {
             throws IOException, InterruptedException {
         Path logsDir = Files.createTempDirectory(Environment.getTestOutputDir(), "emulator_logs");
 
-        LogFile logCat = new LogFile(logsDir.resolve(name + "_logcat.txt"));
-
-        List<String> procArgs =
-                new ArrayList<>(
-                        Arrays.asList(
-                                emulatorBinary.toString(),
-                                "@" + name,
-                                // This port value needs to be unique for each emulator
-                                "-grpc",
-                                Integer.toString(grpcPort),
-                                "-no-snapshot",
-                                // Turn off the modem simulator to avoid b/258836512
-                                // Turn off Vulkan since API 30 has a broken implementation (and we
-                                // don't need it anyway) b/274524732
-                                "-feature",
-                                "-ModemSimulator,-Vulkan",
-                                "-delay-adb",
-                                "-no-boot-anim",
-                                "-verbose",
-                                "-show-kernel",
-                                "-logcat",
-                                "*:V",
-                                "-logcat-output",
-                                logCat.getPath().toFile().getAbsolutePath()));
-
-        procArgs.addAll(extraEmulatorFlags);
-
-        ProcessBuilder pb = new ProcessBuilder(procArgs.toArray(new String[0]));
-        pb.environment().put("HOME", fileSystem.getHome().toString());
-        pb.environment().put("ANDROID_EMULATOR_HOME", fileSystem.getAndroidHome().toString());
-        pb.environment().put("ANDROID_AVD_HOME", getAvdHome(fileSystem).toString());
-        pb.environment().put("ANDROID_SDK_ROOT", sdkDir.toAbsolutePath().toString());
-        // Older emulators (go/aog/3448633) check if this directory exists:
-        Files.createDirectories(sdkDir.toAbsolutePath().resolve("platforms"));
-        pb.environment().put("ANDROID_PREFS_ROOT", fileSystem.getHome().toString());
-        if (display.getDisplay() != null) {
-            pb.environment().put("DISPLAY", display.getDisplay());
-        }
-        // On older emulators in a remote desktop session, the hardware acceleration won't start
-        // properly without this env var.
-        pb.environment().put("CHROME_REMOTE_DESKTOP_SESSION", "1");
-
-        LogFile logFileOut = new LogFile(logsDir.resolve(name + "_stdout.txt"));
-        LogFile logFileErr = new LogFile(logsDir.resolve(name + "_stderr.txt"));
-        pb.redirectOutput(logFileOut.getPath().toFile());
-        pb.redirectError(logFileErr.getPath().toFile());
-        Process process = pb.start();
-
-        // There's no easy/reliable way to determine whether an emulator even CAN start on this
-        // machine, so we check for the process crashing, that way we can report why the test will
-        // fail and potentially cut down on confusion while investigating.
-        new Thread(
-                        () -> {
-                            try {
-                                Thread.sleep(10000);
-                            } catch (InterruptedException e) {
-                                // ignore
-                            }
-                            if (!process.isAlive()) {
-                                int exitCode = process.exitValue();
-                                if (exitCode != 0) {
-                                    System.err.printf(
-                                            "Emulator process (PID=%d) exited unexpectedly with"
-                                                + " code==%d. If you are running on a VM, it's"
-                                                + " possible that nested virtualization is not"
-                                                + " supported. To test this, you can try starting"
-                                                + " the emulator manually. Most likely though, if"
-                                                + " you're seeing this message, it means that the"
-                                                + " emulator won't work on your machine.%n",
-                                            process.pid(), exitCode);
-                                }
-                            }
-                        })
-                .start();
-
-        LogFile logFile;
-        String serialNumber;
-        if (isEmuNext) {
-            logFile = logFileErr;
-            serialNumber =
-                logFile.waitForMatchingLine(
-                    ".*Expected adb serial number: (emulator-\\d+)", 2, TimeUnit.MINUTES).group(1);
+        if (Environment.isWindows()) {
+            return new Emulator(fileSystem, null, null, null, null, null);
         } else {
-            logFile = logFileOut;
-            serialNumber = "emulator-" +
-                logFile.waitForMatchingLine(
-                    ".*control console listening on port (\\d+), ADB on port \\d+", 2, TimeUnit.MINUTES).group(1);
-        }
+            LogFile logCat = new LogFile(logsDir.resolve(name + "_logcat.txt"));
 
-        return new Emulator(fileSystem, logFile, logCat, serialNumber, process, name);
+            List<String> procArgs =
+                new ArrayList<>(
+                    Arrays.asList(
+                        emulatorBinary.toString(),
+                        "@" + name,
+                        // This port value needs to be unique for each emulator
+                        "-grpc",
+                        Integer.toString(grpcPort),
+                        "-no-snapshot",
+                        // Turn off the modem simulator to avoid b/258836512
+                        // Turn off Vulkan since API 30 has a broken implementation (and we
+                        // don't need it anyway) b/274524732
+                        "-feature",
+                        "-ModemSimulator,-Vulkan",
+                        "-delay-adb",
+                        "-no-boot-anim",
+                        "-verbose",
+                        "-show-kernel",
+                        "-logcat",
+                        "*:V",
+                        "-logcat-output",
+                        logCat.getPath().toFile().getAbsolutePath()));
+            procArgs.addAll(extraEmulatorFlags);
+            ProcessBuilder pb = new ProcessBuilder(procArgs.toArray(new String[0]));
+            pb.environment().put("HOME", fileSystem.getHome().toString());
+            pb.environment().put("ANDROID_EMULATOR_HOME", fileSystem.getAndroidHome().toString());
+            pb.environment().put("ANDROID_AVD_HOME", getAvdHome(fileSystem).toString());
+            pb.environment().put("ANDROID_SDK_ROOT", sdkDir.toAbsolutePath().toString());
+            // Older emulators (go/aog/3448633) check if this directory exists:
+            Files.createDirectories(sdkDir.toAbsolutePath().resolve("platforms"));
+            pb.environment().put("ANDROID_PREFS_ROOT", fileSystem.getHome().toString());
+            if (display.getDisplay() != null) {
+              pb.environment().put("DISPLAY", display.getDisplay());
+            }
+            // On older emulators in a remote desktop session, the hardware acceleration won't start
+            // properly without this env var.
+            pb.environment().put("CHROME_REMOTE_DESKTOP_SESSION", "1");
+            LogFile logFileOut = new LogFile(logsDir.resolve(name + "_stdout.txt"));
+            LogFile logFileErr = new LogFile(logsDir.resolve(name + "_stderr.txt"));
+            pb.redirectOutput(logFileOut.getPath().toFile());
+            pb.redirectError(logFileErr.getPath().toFile());
+            Process process = pb.start();
+
+            // There's no easy/reliable way to determine whether an emulator even CAN start on this
+            // machine, so we check for the process crashing, that way we can report why the test will
+            // fail and potentially cut down on confusion while investigating.
+            new Thread(
+                () -> {
+                    try {
+                        Thread.sleep(10000);
+                    }
+                    catch (InterruptedException e) {
+                        // ignore
+                    }
+                    if (!process.isAlive()) {
+                        int exitCode = process.exitValue();
+                        if (exitCode != 0) {
+                            System.err.printf(
+                                "Emulator process (PID=%d) exited unexpectedly with"
+                                + " code==%d. If you are running on a VM, it's"
+                                + " possible that nested virtualization is not"
+                                + " supported. To test this, you can try starting"
+                                + " the emulator manually. Most likely though, if"
+                                + " you're seeing this message, it means that the"
+                                + " emulator won't work on your machine.%n",
+                                process.pid(), exitCode);
+                        }
+                    }
+                }).start();
+
+            LogFile logFile;
+            String serialNumber;
+            if (isEmuNext) {
+              logFile = logFileErr;
+              serialNumber =
+                logFile.waitForMatchingLine(
+                  ".*Expected adb serial number: (emulator-\\d+)", 2, TimeUnit.MINUTES).group(1);
+            } else {
+                logFile = logFileOut;
+                serialNumber = "emulator-" +
+                    logFile.waitForMatchingLine(
+                  ".*control console listening on port (\\d+), ADB on port \\d+", 2, TimeUnit.MINUTES).group(1);
+            }
+            return new Emulator(fileSystem, logFile, logCat, serialNumber, process, name);
+        }
     }
 
     private Emulator(
@@ -229,11 +229,13 @@ public class Emulator implements AutoCloseable {
     }
 
     public void waitForBoot() throws IOException, InterruptedException {
-        if (process == null) {
-            throw new IllegalStateException("Emulator not running yet.");
+        if (!Environment.isWindows()) {
+            if (process == null) {
+                throw new IllegalStateException("Emulator not running yet.");
+            }
+            TestLogger.log("Emulator#waitForBoot");
+            logFile.waitForMatchingLine(".*Boot completed in \\d+ ms", 12, TimeUnit.MINUTES);
         }
-        TestLogger.log("Emulator#waitForBoot");
-        logFile.waitForMatchingLine(".*Boot completed in \\d+ ms", 12, TimeUnit.MINUTES);
     }
 
     public Path getHome() {
@@ -255,7 +257,7 @@ public class Emulator implements AutoCloseable {
     }
 
     @Override
-    public void close() throws InterruptedException {
+    public void close() throws InterruptedException, IOException {
         if (process != null) {
             process.destroy();
             process.waitFor();
