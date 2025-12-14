@@ -209,7 +209,7 @@ public class Emulator implements AutoCloseable {
         return new Emulator(fileSystem, logFile, logCat, serialNumber, process, name);
     }
 
-    public Emulator(
+    private Emulator(
             TestFileSystem fileSystem,
             LogFile logFile,
             LogFile logCat,
