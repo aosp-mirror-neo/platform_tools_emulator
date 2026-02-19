@@ -48,13 +48,16 @@ public class EmulatorTest {
 
     String emuBin = getProperty("emulator.test.emulator.path");
 
+    boolean useSnapshot = System.getProperty("emulator.test.snapshot.path") != null;
+
     try (Display display = Display.createDefault();
          Adb adb = Adb.start(sdk, fileSystem);
          Emulator emulator = Emulator.start(fileSystem,
                                             Paths.get(emuBin),
                                             isEmuNext,
                                             sdk.getSourceDir(),
-                                            display, "emu", 8554, new ArrayList<>())) {
+                                            display, "emu", 8554, new ArrayList<>(),
+                                            useSnapshot, false)) {
       emulator.waitForBoot();
       adb.waitForDevice(emulator);
     }

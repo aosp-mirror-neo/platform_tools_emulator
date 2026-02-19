@@ -23,8 +23,5 @@ filegroup(
         ],
         "//conditions:default": [],
     }),
-    # Only to be used in tests
-    visibility = [
-        "//tools/emulator:__subpackages__",
-    ],
+    visibility = ["//visibility:public"],
 )

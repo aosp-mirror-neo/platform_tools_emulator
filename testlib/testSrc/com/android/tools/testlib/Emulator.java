@@ -65,6 +65,14 @@ public class Emulator implements AutoCloseable {
 
     public static void createEmulator(TestFileSystem fileSystem, String name, Path systemImage)
             throws IOException {
+        try {
+            if (SnapshotSetup.setupFromSnapshot(fileSystem, name, systemImage)) {
+                TestLogger.log("Successfully configured AVD from snapshot.");
+                return;
+            }
+        } catch (IOException e) {
+            TestLogger.log("Failed to setup from snapshot, continuing: " + e.getMessage());
+        }
         Path avdHome = getAvdHome(fileSystem);
         Files.createDirectories(avdHome);
 
@@ -74,6 +82,9 @@ public class Emulator implements AutoCloseable {
         String arch = emulatorArchitectureFrom(abi);
 
         Path emuIni = avdHome.resolve(name + ".ini");
+        if (Files.exists(emuIni)) {
+            Files.delete(emuIni);
+        }
         Files.createFile(emuIni);
         try (FileWriter writer = new FileWriter(emuIni.toFile())) {
             writer.write(String.format("avd.ini.encoding=UTF-8%n"));
@@ -97,6 +108,19 @@ public class Emulator implements AutoCloseable {
             int grpcPort,
             List<String> extraEmulatorFlags)
             throws IOException, InterruptedException {
+        return start(fileSystem, sdk, display, name, grpcPort, extraEmulatorFlags, false, false);
+    }
+
+    public static Emulator start(
+            TestFileSystem fileSystem,
+            AndroidSdk sdk,
+            Display display,
+            String name,
+            int grpcPort,
+            List<String> extraEmulatorFlags,
+            boolean useSnapshot,
+            boolean saveSnapshot)
+            throws IOException, InterruptedException {
         String emulatorDir = Environment.isArm64() ? "emulator-arm64" : "emulator";
         return Emulator.start(
             fileSystem,
@@ -106,7 +130,9 @@ public class Emulator implements AutoCloseable {
             display,
             name,
             grpcPort,
-            extraEmulatorFlags);
+            extraEmulatorFlags,
+            useSnapshot,
+            saveSnapshot);
     }
 
     public static Emulator start(
@@ -118,6 +144,31 @@ public class Emulator implements AutoCloseable {
             String name,
             int grpcPort,
             List<String> extraEmulatorFlags)
+            throws IOException, InterruptedException {
+        return start(
+            fileSystem,
+            emulatorBinary,
+            isEmuNext,
+            sdkDir,
+            display,
+            name,
+            grpcPort,
+            extraEmulatorFlags,
+            false,
+            false);
+    }
+
+    public static Emulator start(
+            TestFileSystem fileSystem,
+            Path emulatorBinary,
+            boolean isEmuNext,
+            Path sdkDir,
+            Display display,
+            String name,
+            int grpcPort,
+            List<String> extraEmulatorFlags,
+            boolean useSnapshot,
+            boolean saveSnapshot)
             throws IOException, InterruptedException {
         Path logsDir = Files.createTempDirectory(Environment.getTestOutputDir(), "emulator_logs");
 
@@ -131,12 +182,6 @@ public class Emulator implements AutoCloseable {
                     // This port value needs to be unique for each emulator
                     "-grpc",
                     Integer.toString(grpcPort),
-                    "-no-snapshot",
-                    // Turn off the modem simulator to avoid b/258836512
-                    // Turn off Vulkan since API 30 has a broken implementation (and we
-                    // don't need it anyway) b/274524732
-                    "-feature",
-                    "-ModemSimulator,-Vulkan",
                     "-delay-adb",
                     "-no-boot-anim",
                     "-verbose",
@@ -145,6 +190,15 @@ public class Emulator implements AutoCloseable {
                     "*:V",
                     "-logcat-output",
                     logCat.getPath().toFile().getAbsolutePath()));
+
+        if (!useSnapshot && !saveSnapshot) {
+            procArgs.add("-no-snapshot");
+        } else if (useSnapshot && !saveSnapshot) {
+            procArgs.add("-no-snapshot-save");
+        } else if (!useSnapshot && saveSnapshot) {
+            procArgs.add("-no-snapshot-load");
+        }
+
         procArgs.addAll(extraEmulatorFlags);
         ProcessBuilder pb = new ProcessBuilder(procArgs.toArray(new String[0]));
         pb.environment().put("HOME", fileSystem.getHome().toString());
@@ -228,8 +282,21 @@ public class Emulator implements AutoCloseable {
         if (process == null) {
             throw new IllegalStateException("Emulator not running yet.");
         }
-        TestLogger.log("Emulator#waitForBoot");
-        logFile.waitForMatchingLine(".*Boot completed in \\d+ ms", 12, TimeUnit.MINUTES);
+        TestLogger.log("Emulator#waitForBoot: Waiting for boot completion or snapshot load...");
+
+        String bootCompleteMessage = ".*Boot completed in \\d+ ms.*";
+        String snapshotLoadMessage = ".*Successfully loaded snapshot 'default_boot'.*";
+        String combinedRegex = "(" + bootCompleteMessage + ")|(" + snapshotLoadMessage + ")";
+
+        Matcher matcher = logFile.waitForMatchingLine(combinedRegex, 12, TimeUnit.MINUTES);
+
+        if (matcher.group(1) != null) {
+            TestLogger.log("Emulator#waitForBoot: Cold boot confirmed.");
+        } else if (matcher.group(2) != null) {
+            TestLogger.log("Emulator#waitForBoot: Snapshot load confirmed.");
+        } else {
+            TestLogger.log("Emulator#waitForBoot: Unknown boot completion message.");
+        }
     }
 
     public Path getHome() {
