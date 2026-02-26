@@ -21,7 +21,8 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 import java.util.regex.Matcher
 import kotlin.time.Duration
@@ -40,14 +41,18 @@ private constructor(
   private val headerSize: Int = 0,
 ) : AutoCloseable {
 
-    @Throws(IOException::class)
+  private var _logFile: LogFile? = null
+
+  private val logFile: LogFile
+    get() = _logFile ?: LogFile(stdout, headerSize).also { _logFile = it }
+
+  @Throws(IOException::class)
     override fun close() {
         when (process) {
             null -> runCommand("kill-server")
             else -> {
                 if (process.isAlive) process.destroy()
-                val footer =
-                    "=== Stream closed at: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss:SS", Locale.US).format(Date())} ==="
+                val footer = "=== Stream closed at: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss:SS", Locale.US).format(Date())} ==="
                 FileWriter(stdout.toString(), true).use { it.write(footer) }
                 FileWriter(stderr.toString(), true).use { it.write(footer) }
             }
@@ -77,7 +82,7 @@ private constructor(
 
     @Throws(IOException::class, InterruptedException::class)
     fun waitForLog(expectedRegex: String, timeout: Long, unit: TimeUnit): Matcher =
-        LogFile(stdout, headerSize).waitForMatchingLine(expectedRegex, timeout, unit)
+        logFile.waitForMatchingLine(expectedRegex, timeout, unit)
 
     @JvmSynthetic
     fun waitForLog(expectedRegex: String, timeout: Duration): Matcher =
@@ -98,7 +103,6 @@ private constructor(
     @JvmSynthetic
     fun waitForLogs(expectedRegexes: Iterable<String>, timeout: Duration): List<Matcher> {
         val start = TimeSource.Monotonic.markNow()
-        val logFile = LogFile(stdout, headerSize)
         return expectedRegexes.map {
             val remainingDuration = timeout - start.elapsedNow()
             logFile.waitForMatchingLine(it, remainingDuration.inWholeMicroseconds, TimeUnit.MICROSECONDS)
