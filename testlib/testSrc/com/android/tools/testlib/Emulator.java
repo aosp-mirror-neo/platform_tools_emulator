@@ -108,7 +108,7 @@ public class Emulator implements AutoCloseable {
             int grpcPort,
             List<String> extraEmulatorFlags)
             throws IOException, InterruptedException {
-        return start(fileSystem, sdk, display, name, grpcPort, extraEmulatorFlags, false, false);
+        return start(fileSystem, sdk, display, name, grpcPort, extraEmulatorFlags, BootMode.COLD_BOOT_NO_SNAPSHOT_SAVE);
     }
 
     public static Emulator start(
@@ -118,8 +118,7 @@ public class Emulator implements AutoCloseable {
             String name,
             int grpcPort,
             List<String> extraEmulatorFlags,
-            boolean useSnapshot,
-            boolean saveSnapshot)
+            BootMode bootMode)
             throws IOException, InterruptedException {
         String emulatorDir = Environment.isArm64() ? "emulator-arm64" : "emulator";
         return Emulator.start(
@@ -131,8 +130,7 @@ public class Emulator implements AutoCloseable {
             name,
             grpcPort,
             extraEmulatorFlags,
-            useSnapshot,
-            saveSnapshot);
+            bootMode);
     }
 
     public static Emulator start(
@@ -154,8 +152,7 @@ public class Emulator implements AutoCloseable {
             name,
             grpcPort,
             extraEmulatorFlags,
-            false,
-            false);
+            BootMode.COLD_BOOT_NO_SNAPSHOT_SAVE);
     }
 
     public static Emulator start(
@@ -167,8 +164,7 @@ public class Emulator implements AutoCloseable {
             String name,
             int grpcPort,
             List<String> extraEmulatorFlags,
-            boolean useSnapshot,
-            boolean saveSnapshot)
+            BootMode bootMode)
             throws IOException, InterruptedException {
         Path logsDir = Files.createTempDirectory(Environment.getTestOutputDir(), "emulator_logs");
 
@@ -191,12 +187,18 @@ public class Emulator implements AutoCloseable {
                     "-logcat-output",
                     logCat.getPath().toFile().getAbsolutePath()));
 
-        if (!useSnapshot && !saveSnapshot) {
-            procArgs.add("-no-snapshot");
-        } else if (useSnapshot && !saveSnapshot) {
-            procArgs.add("-no-snapshot-save");
-        } else if (!useSnapshot && saveSnapshot) {
-            procArgs.add("-no-snapshot-load");
+        if (bootMode != null) {
+            switch (bootMode) {
+                case COLD_BOOT_NO_SNAPSHOT_SAVE:
+                    procArgs.add("-no-snapshot");
+                    break;
+                case FROM_SNAPSHOT_NO_SNAPSHOT_SAVE:
+                    procArgs.add("-no-snapshot-save");
+                    break;
+                case COLD_BOOT_AND_SNAPSHOT_SAVE:
+                    procArgs.add("-no-snapshot-load");
+                    break;
+            }
         }
 
         procArgs.addAll(extraEmulatorFlags);
@@ -323,6 +325,16 @@ public class Emulator implements AutoCloseable {
             process.destroy();
             process.waitFor();
         }
+    }
+
+    /** The mode in which the {@link Emulator} should be started. */
+    public enum BootMode {
+        /** Cold boot, no snapshot used or saved. */
+        COLD_BOOT_NO_SNAPSHOT_SAVE,
+        /** Boot from an existing snapshot, no snapshot saved. */
+        FROM_SNAPSHOT_NO_SNAPSHOT_SAVE,
+        /** Cold boot, then save the state to a snapshot upon shutdown. */
+        COLD_BOOT_AND_SNAPSHOT_SAVE,
     }
 
     private static String emulatorArchitectureFrom(String abi) {
