@@ -24,6 +24,8 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class SnapshotSetup {
 
@@ -87,7 +89,6 @@ public class SnapshotSetup {
         TestLogger.log("Renamed extracted snapshot files to use AVD name: " + avdName);
 
         modifyIniFilesForCurrentEnvironment(destIniFile, destAvdDir, avdName, systemImage);
-        modifyHardwareIniFiles(destAvdDir, sourceAvdName, avdName);
         makePathRelative(destIniFile, destAvdDir.resolve("config.ini"), avdName);
 
         TestLogger.log("Snapshot setup complete for AVD: " + avdName);
@@ -99,62 +100,32 @@ public class SnapshotSetup {
             List<String> lines = Files.readAllLines(iniFile);
             List<String> modifiedLines = new ArrayList<>();
             for (String line : lines) {
-                String trimmed = line.trim();
-                if (trimmed.startsWith("path.rel")) {
-                    modifiedLines.add("path.rel=avd/" + avdName + ".avd");
-                } else if (trimmed.startsWith("path")) {
+                if (line.trim().startsWith("path=")) {
                     modifiedLines.add("path=" + avdDir.toAbsolutePath());
                 } else {
                     modifiedLines.add(line);
                 }
             }
             Files.write(iniFile, modifiedLines, StandardOpenOption.TRUNCATE_EXISTING);
-            TestLogger.log("Updated 'path' and 'path.rel' in " + iniFile.getFileName());
+            TestLogger.log("Updated 'path' in " + iniFile.getFileName());
         }
 
         Path configIniFile = avdDir.resolve("config.ini");
         if (Files.exists(configIniFile)) {
             List<String> lines = Files.readAllLines(configIniFile);
             List<String> modifiedLines = new ArrayList<>();
-
             for (String line : lines) {
-                String trimmed = line.trim();
-                if (trimmed.startsWith("image.sysdir.1")) {
+                if (line.trim().startsWith("image.sysdir.1=")) {
                     modifiedLines.add("image.sysdir.1=" + systemImage.toAbsolutePath());
-                } else if (trimmed.startsWith("avd.name")) {
+                } else if (line.trim().startsWith("avd.name=")) {
                     modifiedLines.add("avd.name=" + avdName);
-                } else if (trimmed.startsWith("avd.id")) {
-                    modifiedLines.add("avd.id=" + avdName);
                 } else {
                     modifiedLines.add(line);
                 }
             }
             Files.write(configIniFile, modifiedLines, StandardOpenOption.TRUNCATE_EXISTING);
-            TestLogger.log("Updated 'image.sysdir.1', 'avd.name', and 'avd.id' in " + configIniFile.getFileName());
+            TestLogger.log("Updated 'image.sysdir.1' and 'avd.name' in " + configIniFile.getFileName());
         }
-    }
-
-    private static void modifyHardwareIniFiles(Path destAvdDir, String sourceAvdName, String destAvdName) throws IOException {
-        Path hardwareQemuIniFile = destAvdDir.resolve("hardware-qemu.ini");
-        if (Files.exists(hardwareQemuIniFile)) {
-            replaceInFile(hardwareQemuIniFile, "\\b" + sourceAvdName + "\\b", destAvdName);
-            TestLogger.log("Updated " + sourceAvdName + " to " + destAvdName + " in " + hardwareQemuIniFile.toAbsolutePath());
-        }
-
-        Path snapshotHardwareIniFile = destAvdDir.resolve("snapshots").resolve("default_boot").resolve("hardware.ini");
-        if (Files.exists(snapshotHardwareIniFile)) {
-            replaceInFile(snapshotHardwareIniFile, "\\b" + sourceAvdName + "\\b", destAvdName);
-            TestLogger.log("Updated " + sourceAvdName + " to " + destAvdName + " in " + snapshotHardwareIniFile.toAbsolutePath());
-        }
-    }
-
-    private static void replaceInFile(Path filePath, String regex, String replacement) throws IOException {
-        List<String> lines = Files.readAllLines(filePath);
-        List<String> modifiedLines = new ArrayList<>();
-        for (String line : lines) {
-            modifiedLines.add(line.replaceAll(regex, replacement));
-        }
-        Files.write(filePath, modifiedLines, StandardOpenOption.TRUNCATE_EXISTING);
     }
 
     private static void makePathRelative(Path iniFile, Path configIniFile, String avdName) throws IOException {
@@ -173,18 +144,37 @@ public class SnapshotSetup {
 
         List<String> configLines = Files.readAllLines(configIniFile);
         List<String> modifiedConfigLines = new ArrayList<>();
+        Pattern sysdirPattern = Pattern.compile("^(image\\.sysdir\\.1\\s*=\\s*)(.*)$");
 
         for (String line : configLines) {
-            String trimmedLine = line.trim();
-            if (trimmedLine.startsWith("image.sysdir.1")) {
-                int eqIndex = line.indexOf('=');
-                if (eqIndex != -1 && line.substring(0, eqIndex).trim().equals("image.sysdir.1")) {
-                    String key = line.substring(0, eqIndex + 1);
-                    String pathStr = line.substring(eqIndex + 1).trim();
-                    Path path = Paths.get(pathStr);
+            Matcher m = sysdirPattern.matcher(line);
+            if (m.matches()) {
+                String key = m.group(1);
+                String pathStr = m.group(2).trim();
+                Path path = Paths.get(pathStr);
 
-                    Path currentPath = sanitizePath(path);
-                    modifiedConfigLines.add(key + currentPath.toAbsolutePath().toString());
+                Path currentPath = sanitizePath(path);
+                String currentPathStr = currentPath.toAbsolutePath().toString();
+
+                String repoMarker = "/external/";
+                // The relative path "../../../../../" assumes that the AVD's config.ini
+                // is located five directory levels deep from the WORKSPACE_ROOT
+                // (e.g., TEST_SRCDIR/_main), where the "external/" directory resides.
+                // For example, if WORKSPACE_ROOT is /tmp/runfiles/_main, and the system image
+                // is at /tmp/runfiles/_main/external/..., this implies the config.ini
+                // is at /tmp/runfiles/_main/dir1/dir2/dir3/dir4/dir5/.avd/config.ini.
+                int repoIndex = currentPathStr.indexOf(repoMarker);
+                if (repoIndex != -1) {
+                    String repoPath = currentPathStr.substring(repoIndex + repoMarker.length());
+                    modifiedConfigLines.add(key + "../../../../../" + repoPath);
+                    continue;
+                }
+
+                String runfilesMarker = ".runfiles/";
+                int runfilesIndex = currentPathStr.indexOf(runfilesMarker);
+                if (runfilesIndex != -1) {
+                    String suffix = currentPathStr.substring(runfilesIndex + runfilesMarker.length());
+                    modifiedConfigLines.add(key + "../../../../../" + suffix);
                     continue;
                 }
             }
