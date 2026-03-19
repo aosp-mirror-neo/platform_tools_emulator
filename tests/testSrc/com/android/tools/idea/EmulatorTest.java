@@ -57,7 +57,7 @@ public class EmulatorTest {
                                             isEmuNext,
                                             sdk.getSourceDir(),
                                             display, "emu", 8554, new ArrayList<>(),
-                                            useSnapshot, false)) {
+                                            useSnapshot ? Emulator.BootMode.FROM_SNAPSHOT_NO_SNAPSHOT_SAVE : Emulator.BootMode.COLD_BOOT_NO_SNAPSHOT_SAVE)) {
       emulator.waitForBoot();
       adb.waitForDevice(emulator);
     }
