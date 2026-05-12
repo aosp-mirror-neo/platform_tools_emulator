@@ -360,21 +360,28 @@ public class Emulator implements AutoCloseable {
     /** A particular supported {@link Emulator} image to use. */
     public enum SystemImage {
         // Google API, userdebug builds
-        API_30("system_image_android-30_default_x86_64"),
-        API_31("system_image_android-31_default_x86_64"),
-        API_33("system_image_android-33_default_x86_64"),
-        API_35("system_image_android-35_default_x86_64"),
+        API_30("system_image_android-30_default"),
+        API_31("system_image_android-31_default"),
+        API_33("system_image_android-33_default"),
+        API_35("system_image_android-35_default"),
         // Android Automated Test Device system image
-        API_33_ATD("system_image_android-33_aosp_atd_x86_64"),
+        API_33_ATD("system_image_android-33_aosp_atd"),
         // Google Play builds
-        API_33_PlayStore("system_image_android-33PlayStore_default_x86_64"),
-        API_35_PlayStore("system_image_android-35PlayStore_default_x86_64");
+        API_33_PlayStore("system_image_android-33PlayStore_default"),
+        API_35_PlayStore("system_image_android-35PlayStore_default");
         /** Path to the image for this emulator {@link SystemImage}. */
         public final String path;
 
         private SystemImage(String path) {
+            if (path.contains("x86_64") || path.contains("arm64")) {
+                throw new IllegalArgumentException("System image path must be architecture-agnostic (got: " + path + ")");
+            }
             // When running on M1 Mac, we need to use arm64 images
-            path = Environment.isArm64() ? path.replace("x86_64", "arm64") : path;
+            if (Environment.isArm64()) {
+                path = path + "_arm64";
+            } else {
+                path = path + "_x86_64";
+            }
             // When running from IDE, we need to adjust the path of the artifact.
             // Run "bazel cquery --output=files @system_image_android-31_default_x86_64//:*"
             // to see the actual path.
