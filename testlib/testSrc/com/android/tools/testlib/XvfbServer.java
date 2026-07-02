@@ -25,12 +25,17 @@ import java.util.concurrent.TimeUnit;
 
 /** An X server potentially backed by Xvfb. */
 // LINT.IfChange
-public class XvfbServer implements Display {
+public class XvfbServer implements TrackableDisplay {
     private static final String DEFAULT_RESOLUTION = "1280x1024x24";
     private static final int MAX_RETRIES_TO_FIND_DISPLAY = 20;
     private static final String XVFB_LAUNCHER =
             "tools/emulator/testlib/display/launch_xvfb.sh";
     private static final String FFMPEG = "tools/emulator/testlib/display/ffmpeg";
+
+    private final Path outputVideo;
+    private final Path workspaceRoot;
+    private final Path testOutputDir;
+    private final ProcessService processService;
 
     private Process process;
 
@@ -42,10 +47,60 @@ public class XvfbServer implements Display {
     private final String resolution;
 
     public XvfbServer() throws IOException {
-        this(DEFAULT_RESOLUTION);
+        this(
+            DEFAULT_RESOLUTION,
+            Environment.getTestOutputDir().resolve("recording.mp4"),
+            Environment.getWorkspaceRoot(),
+            Environment.getTestOutputDir()
+        );
     }
 
     public XvfbServer(String resolution) throws IOException {
+        this(
+            resolution,
+            Environment.getTestOutputDir().resolve("recording.mp4"),
+            Environment.getWorkspaceRoot(),
+            Environment.getTestOutputDir()
+        );
+    }
+
+    public XvfbServer(
+        Path outputVideo,
+        Path workspaceRoot,
+        Path testOutputDir
+    ) throws IOException {
+        this(DEFAULT_RESOLUTION, outputVideo, workspaceRoot, testOutputDir);
+    }
+
+    public XvfbServer(
+        Path outputVideo,
+        Path workspaceRoot,
+        Path testOutputDir,
+        ProcessService processService
+    ) throws IOException {
+        this(DEFAULT_RESOLUTION, outputVideo, workspaceRoot, testOutputDir, processService);
+    }
+
+    public XvfbServer(
+        String resolution,
+        Path outputVideo,
+        Path workspaceRoot,
+        Path testOutputDir
+    ) throws IOException {
+        this(resolution, outputVideo, workspaceRoot, testOutputDir, ProcessService.DEFAULT);
+    }
+
+    public XvfbServer(
+        String resolution,
+        Path outputVideo,
+        Path workspaceRoot,
+        Path testOutputDir,
+        ProcessService processService
+    ) throws IOException {
+        this.outputVideo = outputVideo;
+        this.workspaceRoot = workspaceRoot;
+        this.testOutputDir = testOutputDir;
+        this.processService = processService;
         String display = System.getenv("DISPLAY");
         this.resolution = resolution;
         if (display == null || display.isEmpty()) {
@@ -64,10 +119,19 @@ public class XvfbServer implements Display {
         return display;
     }
 
+    @Override
+    public Long getRecorderPid() {
+        return recorder != null ? recorder.pid() : null;
+    }
+
+    @Override
+    public Long getProcessPid() {
+        return process != null ? process.pid() : null;
+    }
+
     private Process launchRecorder(String display) throws IOException {
-        Path dir = Environment.getTestOutputDir();
-        Path mp4 = dir.resolve("recording.mp4");
-        Path ffmpeg = Environment.getWorkspaceRoot().resolve(FFMPEG);
+        Path mp4 = outputVideo;
+        Path ffmpeg = workspaceRoot.resolve(FFMPEG);
 
         // Note that -pix_fmt is required by some players:
         // https://trac.ffmpeg.org/wiki/Encode/H.264#Encodingfordumbplayers
@@ -85,9 +149,9 @@ public class XvfbServer implements Display {
                         "-movflags",
                         "faststart",
                         mp4.toString());
-        pb.redirectOutput(dir.resolve("ffmpeg_stdout.txt").toFile());
-        pb.redirectError(dir.resolve("ffmpeg_stderr.txt").toFile());
-        return pb.start();
+        pb.redirectOutput(testOutputDir.resolve("ffmpeg_stdout.txt").toFile());
+        pb.redirectError(testOutputDir.resolve("ffmpeg_stderr.txt").toFile());
+        return processService.startProcess(pb);
     }
 
     public String launchUnusedDisplay() {
@@ -124,7 +188,7 @@ public class XvfbServer implements Display {
 
     private Process launchDisplay(String display) {
         this.display = display;
-        Path launcher = Environment.getWorkspaceRoot().resolve(XVFB_LAUNCHER);
+        Path launcher = workspaceRoot.resolve(XVFB_LAUNCHER);
         if (Files.notExists(launcher)) {
             throw new IllegalStateException(
                     "Xvfb runfiles does not exist. "
@@ -133,14 +197,15 @@ public class XvfbServer implements Display {
                             + "//tools/emulator/testlib/display:xvfb");
         }
         try {
-            return new ProcessBuilder(
+            ProcessBuilder pb =
+                    new ProcessBuilder(
                             launcher.toString(),
                             display,
-                            Environment.getWorkspaceRoot().toString(),
+                            workspaceRoot.toString(),
                             resolution)
-                    .redirectErrorStream(true)
-                    .redirectOutput(Environment.getTestOutputDir().resolve("xvfb.log").toFile())
-                    .start();
+                            .redirectErrorStream(true)
+                            .redirectOutput(testOutputDir.resolve("xvfb.log").toFile());
+            return processService.startProcess(pb);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
