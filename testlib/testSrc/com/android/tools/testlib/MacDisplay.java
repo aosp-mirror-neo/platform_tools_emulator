@@ -23,9 +23,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class MacDisplay implements Display {
+public class MacDisplay implements TrackableDisplay {
     private static final String FFMPEG = "tools/emulator/testlib/display/ffmpeg_mac64";
 
+    private final Path outputVideo;
+    private final Path workspaceRoot;
+    private final Path testOutputDir;
     private Process recorder;
 
     /**
@@ -36,6 +39,22 @@ public class MacDisplay implements Display {
     private boolean forciblyDestroy = true;
 
     public MacDisplay() throws IOException {
+        this(
+            Environment.getTestOutputDir().resolve("recording.mkv"),
+            Environment.getWorkspaceRoot(),
+            Environment.getTestOutputDir()
+        );
+    }
+
+    public MacDisplay(
+        Path outputVideo,
+        Path workspaceRoot,
+        Path testOutputDir
+    ) throws IOException {
+        this.outputVideo = outputVideo;
+        this.workspaceRoot = workspaceRoot;
+        this.testOutputDir = testOutputDir;
+
         // When running through IDEA, it typically means one of two things:
         // 1. You can watch the test execution yourself, so the video would be redundant
         // 2. You want to still use your computer, in which case you don't want ffmpeg using
@@ -68,6 +87,11 @@ public class MacDisplay implements Display {
     @Override
     public String getDisplay() {
         return null;
+    }
+
+    @Override
+    public Long getRecorderPid() {
+        return recorder != null ? recorder.pid() : null;
     }
 
     /**
@@ -113,12 +137,11 @@ public class MacDisplay implements Display {
     }
 
     private Path resolveWorkspacePathUnchecked(String path) {
-        return Environment.getWorkspaceRoot().resolve(path);
+        return workspaceRoot.resolve(path);
     }
 
     private void launchRecorder(String videoDeviceIndex) throws IOException {
-        Path dir = Environment.getTestOutputDir();
-        Path mkv = dir.resolve("recording.mkv");
+        Path mkv = outputVideo;
         Path ffmpeg = resolveWorkspacePathUnchecked(FFMPEG);
 
         // Note that -pix_fmt is required by some players:
@@ -143,8 +166,8 @@ public class MacDisplay implements Display {
                         "-movflags",
                         "faststart",
                         mkv.toString());
-        pb.redirectOutput(dir.resolve("ffmpeg_stdout.txt").toFile());
-        pb.redirectError(dir.resolve("ffmpeg_stderr.txt").toFile());
+        pb.redirectOutput(testOutputDir.resolve("ffmpeg_stdout.txt").toFile());
+        pb.redirectError(testOutputDir.resolve("ffmpeg_stderr.txt").toFile());
 
         recorder = pb.start();
 

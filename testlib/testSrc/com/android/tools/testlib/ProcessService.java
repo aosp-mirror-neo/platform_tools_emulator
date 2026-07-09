@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2025 The Android Open Source Project
+ * Copyright (C) 2026 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,18 +15,10 @@
  */
 package com.android.tools.testlib;
 
-/** The native display (as opposed to a virtual display like Xvfb). */
-public class NativeDisplay implements TrackableDisplay {
-    @Override
-    public String getDisplay() {
-        return null;
-    }
+import java.io.IOException;
 
-    @Override
-    public Long getRecorderPid() {
-        return null;
-    }
+public interface ProcessService {
+    Process startProcess(ProcessBuilder pb) throws IOException;
 
-    @Override
-    public void close() throws Exception {}
+    ProcessService DEFAULT = ProcessBuilder::start;
 }
